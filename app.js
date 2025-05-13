@@ -1,65 +1,59 @@
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import 'dotenv/config';
-import express from 'express';
-import {
-  ButtonStyleTypes,
-  InteractionResponseFlags,
-  InteractionResponseType,
-  InteractionType,
-  MessageComponentTypes,
-  verifyKeyMiddleware,
-} from 'discord-interactions';
-import { getRandomEmoji, DiscordRequest } from './utils.js';
-import { getShuffledOptions, getResult } from './game.js';
 
-// Create an express app
-const app = express();
-// Get port, or default to 3000
-const PORT = process.env.PORT || 3000;
-// To keep track of our active games
-const activeGames = {};
-
-/**
- * Interactions endpoint URL where Discord will send HTTP requests
- * Parse request body and verifies incoming requests using discord-interactions package
- */
-app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-  // Interaction id, type and data
-  const { id, type, data } = req.body;
-
-  /**
-   * Handle verification requests
-   */
-  if (type === InteractionType.PING) {
-    return res.send({ type: InteractionResponseType.PONG });
-  }
-
-  /**
-   * Handle slash command requests
-   * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
-   */
-  if (type === InteractionType.APPLICATION_COMMAND) {
-    const { name } = data;
-
-    // "test" command
-    if (name === 'test') {
-      // Send a message into the channel where command was triggered from
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          // Fetches a random emoji to send from a helper function
-          content: `hello world ${getRandomEmoji()}`,
-        },
-      });
-    }
-
-    console.error(`unknown command: ${name}`);
-    return res.status(400).json({ error: 'unknown command' });
-  }
-
-  console.error('unknown interaction type', type);
-  return res.status(400).json({ error: 'unknown interaction type' });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
-app.listen(PORT, () => {
-  console.log('Listening on port', PORT);
+// Register the slash command once (à lancer une fois)
+const commands = [
+  new SlashCommandBuilder()
+    .setName('test')
+    .setDescription('Répond avec un emoji !')
+    .toJSON(),
+];
+
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
+  try {
+    console.log('⏳ Enregistrement de la commande slash...');
+    await rest.put(
+      Routes.applicationCommands(process.env.APP_ID),
+      { body: commands }
+    );
+    console.log('✅ Commande slash enregistrée !');
+  } catch (err) {
+    console.error(err);
+  }
+})();
+
+// Event : quand le bot est prêt
+client.once('ready', () => {
+  console.log(`✅ Connecté en tant que ${client.user.tag}`);
 });
+
+// Event : réponse à la commande slash
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'test') {
+    const emojis = ['😎', '🚀', '🎉', '🔥'];
+    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+    await interaction.reply(`Hello world ${randomEmoji}`);
+  }
+});
+
+// Event : voir tous les messages
+client.on('messageCreate', message => {
+  if (message.author.bot) return;
+  console.log(`📨 ${message.author.tag} a envoyé : ${message.content}`);
+});
+
+client.login(process.env.DISCORD_TOKEN);
