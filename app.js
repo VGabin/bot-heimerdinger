@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { giveRole, removeRole } from "./app/roles.js";
 import 'dotenv/config';
 
 const client = new Client({
@@ -36,6 +37,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 // Event : quand le bot est prêt
 client.once('ready', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
+});
+
+client.on('guildMemberAdd', (member) => {  
+  giveRole(member);
 });
 
 // Event : réponse à la commande slash
